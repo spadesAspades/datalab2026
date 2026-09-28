@@ -19,7 +19,12 @@
  * Difficulty: 1
  */
 int bitAnd(int x, int y) {
-    return 2;
+    /*
+    4 = 0100
+    5 = 0101
+    ~(~a+~b) = a*b
+    */
+    return ~((~x)|(~y));
 }
 
 /*
@@ -30,7 +35,10 @@ int bitAnd(int x, int y) {
  *   Difficulty: 1
  */
 int bitXor(int x, int y) {
-    return 2;
+    /*
+    相同为0，不同为1
+    */
+    return ~((~x)&(~y))&(~(x&y));
 }
 
 /*
@@ -50,7 +58,9 @@ int bitXor(int x, int y) {
  *   1 if x and y have the same sign , 0 otherwise.
  */
 int samesign(int x, int y) {
-    return 2;
+    if (x && y)
+        return !((x ^ y) >> 31);    //先异或再取第n位
+    return !x && !y;                //直接取反！
 }
 
 /*
@@ -63,7 +73,28 @@ int samesign(int x, int y) {
  *   Difficulty: 4
  */
 int logtwo(int v) {
-    return 2;
+    int r = 0;
+    int s;
+
+    s = ((v>>16)>0)<<4;     //如果右移16大于0，那结果就+16
+    r |= s;
+    v>>=s;
+
+    s = ((v>>8)>0)<<3;
+    r|=s;
+    v>>=s;
+
+    s = ((v>>4)>0)<<2;
+    r|=s;
+    v>>=s;
+
+    s = ((v>>2)>0)<<1;
+    r|=s;
+    v>>=s;
+
+    r|= v>>1;       //检查最后一位
+
+    return r;
 }
 
 /*
@@ -76,7 +107,15 @@ int logtwo(int v) {
  *    Difficulty: 2
  */
 int byteSwap(int x, int n, int m) {
-    return 2;
+    int b1 = (x>>(n<<3))&(0xFF);
+    int b2 = (x>>(m<<3))&(0xFF);
+    
+    int mask = (0xFF<<(n<<3))|(0xFF<<(m<<3));
+
+    x = x& ~mask;       //清零
+    x = x|(b1<<(m<<3))|(b2<<(n<<3));
+
+    return x;
 }
 
 /*
@@ -88,7 +127,13 @@ int byteSwap(int x, int n, int m) {
  *   Difficulty: 3
  */
 unsigned reverse(unsigned v) {
-    return 2;
+    int r = 0;      //res
+    int i=32;       //32位
+    while(i--){
+        r = (r<<1)|(v&1);       //每次取v最低位，拼到r末尾，r左移
+        v>>=1;
+    }
+    return r;
 }
 
 /*
@@ -100,7 +145,13 @@ unsigned reverse(unsigned v) {
  *   Difficulty: 3
  */
 int logicalShift(int x, int n) {
-    return 2;
+    int mask = ~(((1<<31)>>n)<<1);    //n = 4为例，1000 0000.....->1111 1000.....->1111 0000....
+    
+    x = x>>n;
+
+    x &= mask;      //0*0=0,0*1=0
+
+    return x;
 }
 
 /*
@@ -112,7 +163,46 @@ int logicalShift(int x, int n) {
  *   Difficulty: 4
  */
 int leftBitCount(int x) {
-    return 2;
+    int count = 0;
+    int cond;
+    int isfuone = !~x;
+    //!~操作判断是否全1
+    cond = !~(x>>16);       //右移16位，如果全1，那么左侧必定补的是1
+    count += cond<<4;       //+16
+    x <<= (cond<<4);        //左移16
+
+    cond = !~(x>>24);
+    count += cond<<3;       //+8
+    x <<= (cond<<3);        //左移8
+
+    cond = !~(x>>28);
+    count += cond<<2;
+    x <<= (cond<<2);
+
+    cond = !~(x>>30);
+    count += cond<<1;
+    x <<= (cond<<1);
+
+    cond = !~(x>>31);
+    count += cond<<0;
+    x <<= (cond<<0);
+
+    count += isfuone;
+
+    return count;
+    /*
+    1111 1111 1111 1111 1111 1111 1111 1111
+    >>16 取高16位 判断是否全一 然后左移16位
+    1111 1111 1111 1111 0000 0000 0000 0000
+    >>24 取高8位 然后左移8位
+    1111 1111 0000 0000 0000 0000 0000 0000
+    >>28 取高4位 然后左移4
+    1111 0000 0000 0000 0000 0000 0000 0000
+    >>30 取高2位 左移2
+    1100 0000 0000 0000 0000 0000 0000 0000
+    >>31 取高1位 左移1
+    1000 0000 0000 0000 0000 0000 0000 0000
+    */
 }
 
 /*
@@ -124,7 +214,53 @@ int leftBitCount(int x) {
  *   Difficulty: 4
  */
 unsigned float_i2f(int x) {
-    return 2;
+    //整数转浮点数
+    unsigned sign = x & 0x80000000; //取第一位符号位
+    unsigned absx = x;
+    if(x<0) absx = -x;  //转为绝对值
+
+    int exp = 31;   //指数
+    unsigned round,m;
+
+    if(x==0) return 0;
+    if(x==0x80000000) return 0xCF000000;        //-2^31 取绝对值会溢出 先处理
+                            //1 100 11110 000 0000 0000.....
+    while(!(absx & 0x80000000)){    //循环左移，直至最高位为1 确定指数
+        absx <<= 1;
+        exp -= 1;
+    }
+
+    round = absx&0xFF;      //提取低8位 准备舍入
+    absx >>= 8;     //bit31 -> bit23
+    m = absx & 0x7FFFFF;     //取低23位作为尾数
+
+    if (round > 0x80) {
+        m += 1;
+    } else if (round == 0x80 && (m & 1)) {  //正好一半，偶数不动奇数进位
+        m += 1;
+    }
+
+    if (m == 0x800000) {     //尾数溢出，指数加1
+        exp = exp + 1;
+        m = 0;
+    }
+    exp = exp + 127;
+    return sign | (exp << 23) | m;
+
+    /*
+    0x7fffffff = 0111 1111 1111 1111 1111 1111 1111 1111
+    sign = 0
+    absx = 0x7fffffff
+    左移1 exp = 31-1=30
+    absx = 1111 1111 1111 1111 1111 1111 1111 1110
+    round = 1111 1110
+    absx右移8位 = 0000 0000 1111 1111 1111 1111 1111 1111 unsigned无符号类型
+
+    m = .... .... 0111 1111 1111 1111 1111 1111 取低23位作尾数
+    round = 254>128(0x80) 进位
+    此时m+=1 m溢出，进位
+    m=0; exp+=1
+    */
 }
 
 /*
@@ -139,7 +275,14 @@ unsigned float_i2f(int x) {
  *   Difficulty: 4
  */
 unsigned floatScale2(unsigned uf) {
-    return 2;
+    //阶码全1
+    if((uf & 0x7F800000) == 0x7F800000) return uf;      //0111 1111 1000 NAN或无穷大
+    //阶码全0                               1000 0000 0000....  0111 1111 1111....
+    if((uf & 0x7F800000) == 0) return (uf & 0x80000000)|((uf & 0x7FFFFFFF) << 1);   //只对低31位左移,取最高位，然后|拼接
+    //指数为254
+    if((uf & 0x7F800000) == 0x7F000000) return (uf & 0x80000000)| 0x7F800000;       //变为无穷大 阶码全1 M为0
+
+    return uf + (1<<23);    //普通数，指数加1
 }
 
 /*
@@ -156,7 +299,27 @@ unsigned floatScale2(unsigned uf) {
  *   Difficulty: 3
  */
 int float64_f2i(unsigned uf1, unsigned uf2) {
-    return 2;
+    unsigned sign = uf2 >> 31;
+    unsigned exp = (uf2 >> 20) & 0x7ff;
+    int e = exp - 1023;
+    unsigned high, mag;
+
+    if (e < 0) {
+        return 0;
+    }
+    if (e >= 31) {
+        return 0x80000000;
+    }
+    high = (uf2 & 0xfffff) | 0x100000;
+    if (e <= 20) {
+        mag = high >> (20 - e);
+    } else {
+        mag = (high << (e - 20)) | (uf1 >> (52 - e));
+    }
+    if (sign) {
+        return -mag;
+    }
+    return mag;
 }
 
 /*
@@ -173,5 +336,11 @@ int float64_f2i(unsigned uf1, unsigned uf2) {
  *   Difficulty: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    if (x < -149)
+        return 0;
+    if (x > 127)
+        return 0x7f800000;
+    if (x < -126)
+        return 1 << (x + 149);
+    return (x + 127) << 23;
 }
